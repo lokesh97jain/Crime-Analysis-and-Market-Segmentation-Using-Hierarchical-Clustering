@@ -1,0 +1,438 @@
+---
+title: "State-by-State Crime Analysis and Market Segmentation Using Hierarchical Clustering"
+author: "Lokesh Surendra Jain"
+date: '2023-03-06'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(ggdendro)
+
+library(cluster)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(plotly)
+library(data.table)
+#library(caret)
+library(ggbiplot)
+library(tidyr)
+library(cowplot)
+```
+
+# Part 1. USArrests Dataset and Hierarchical Clustering
+
+Consider the "USArrests" data. It is a built-in dataset you may directly
+get in RStudio. Perform hierarchical clustering on the observations
+(states) and answer the following questions.
+
+```{r}
+head(USArrests)
+```
+
+Using hierarchical clustering with complete linkage and Euclidean
+distance, cluster the states.
+
+```{r}
+set.seed(2)
+data("USArrests")
+data <- USArrests
+data <- na.omit(data)
+d_matrix <- dist(data, method = "euclidean")
+
+hc <- hclust(d_matrix)
+plot(hc, main="Complete Linkage", cex = .8)
+
+```
+
+Cut the dendrogram at a height that results in three distinct clusters.
+Interpret the clusters. Which states belong to which clusters?
+
+States like California, New York, Florida, and Illinois are included in
+Cluster 1 because they have greater rates of violent crimes and arrests.
+States like Arkansas, Georgia, and Tennessee, which have modest rates of
+violent crimes and arrests, are included in Cluster 2. Finally, Cluster
+3 includes states like Maine, Montana, and Vermont that have lower rates
+of violent crime and arrests.
+
+```{r}
+clust <- cutree(hc, 3)
+clust
+
+```
+
+```{r}
+table (clust)
+subset(row.names(USArrests), clust == 1)
+subset(row.names(USArrests), clust == 2)
+subset(row.names(USArrests), clust == 3)
+
+```
+
+Hierarchically cluster the states using complete linkage and Euclidean
+distance, after scaling the variables to have standard deviation one.
+Obtain three clusters. Which states belong to which clusters?
+
+Based on their similarities and differences, the 50 states in the
+USArrests dataset were grouped into three clusters via the cutree()
+algorithm. Eight Southeastern states, including Alabama and Louisiana,
+are grouped together in the first cluster because they all have high
+rates of violent crime across the dataset's four categories. The second
+cluster consists of 11 states, including Arizona, California, and Texas,
+with intermediate levels of violent crime and murder, rape, and assault
+arrest rates. The remaining 32 states that have relatively lower rates
+of violent crimes and homicide, rape, and assault arrest rates make up
+the third cluster. As a result, the USArrests dataset's clustering
+exposes varied patterns of criminal behavior across several states.
+
+```{r}
+set.seed(2)
+data("USArrests")
+data <- USArrests
+data <- na.omit(data)
+data_scale <- scale(data)
+d_matrix <- dist(data_scale, method = "euclidean")
+
+hc_scaled <- hclust(d_matrix)
+plot(hc_scaled, main="Complete Linkage", cex = .8)
+```
+
+```{r}
+
+ggdendrogram(hc_scaled, segments = TRUE, lables = TRUE, leaf_labels = TRUE, rotate = FALSE, theme_dendro = TRUE ) + labs(title = "Linkage")
+
+```
+
+```{r}
+
+```
+
+What effect does scaling the variables have on the hierarchical
+clustering obtained? In your opinion, should the variables be scaled
+before the inter-observation dissimilarities are computed?
+
+*Prior to executing hierarchical clustering, scaling variables can have
+a substantial impact on the clusters that are produced. If variables are
+not scaled, the distance calculation may favor the variables with higher
+variances over the rest, clustering data predominantly based on those
+variables. To ensure that each variable contributes equally to the
+distance calculation and prevent dominance by a single variable,
+variables can be scaled to have equal variances, for example by
+standardizing with a standard deviation of one.*
+
+*Scaling variables can result in more precise and meaningful grouping,
+hence in my opinion it should be done before estimating
+inter-observation dissimilarities. By eliminating unit discrepancies
+between variables, scaling can also improve the meaning of comparisons
+between variables.*
+
+# Part 2. Market Segmentation
+
+An advertisement division of large club store needs to perform customer
+analysis the store customers in order to create a segmentation for more
+targeted marketing campaign
+
+You task is to identify similar customers and characterize them (at
+least some of them). In other word perform clustering and identify
+customers segmentation.
+
+This data-set is derived from
+<https://www.kaggle.com/imakash3011/customer-personality-analysis>
+
+    Colomns description:
+    People
+      ID: Customer's unique identifier
+      Year_Birth: Customer's birth year
+      Education: Customer's education level
+      Marital_Status: Customer's marital status
+      Income: Customer's yearly household income
+      Kidhome: Number of children in customer's household
+      Teenhome: Number of teenagers in customer's household
+      Dt_Customer: Date of customer's enrollment with the company
+      Recency: Number of days since customer's last purchase
+      Complain: 1 if the customer complained in the last 2 years, 0 otherwise
+
+    Products
+
+      MntWines: Amount spent on wine in last 2 years
+      MntFruits: Amount spent on fruits in last 2 years
+      MntMeatProducts: Amount spent on meat in last 2 years
+      MntFishProducts: Amount spent on fish in last 2 years
+      MntSweetProducts: Amount spent on sweets in last 2 years
+      MntGoldProds: Amount spent on gold in last 2 years
+
+    Place
+      NumWebPurchases: Number of purchases made through the company’s website
+      NumStorePurchases: Number of purchases made directly in stores
+
+Assume that data was current on 2014-07-01
+
+Read Dataset and Data Conversion to Proper Data Format
+
+Read "m_marketing_campaign.csv" using `data.table::fread` command,
+examine the data.
+
+```{r}
+# fread m_marketing_campaign.csv and save it as df 
+
+marketing_data <- fread("m_marketing_campaign.csv")
+
+marketing_data
+```
+
+```{r}
+# Convert Year_Birth to Age (assume that current date is 2014-07-01)
+marketing_data$Age <- 2014 - marketing_data$Year_Birth
+  
+  
+# Dt_Customer is a date (it is still character), convert it to membership days (i.e. number of days person is a member, name it MembershipDays)
+# hint: note European date format, use as.Date with proper format argument (2 points)
+
+# marketing_data$Dt_Customer <- as.Date(marketing_data$Dt_Customer, format = "%d/%m/%Y")
+# marketing_data$MembershipDays <- as.Date("2014-07-01") - marketing_data$Dt_Customer
+# marketing_data$MembershipDays <- as.numeric(marketing_data$MembershipDays, units = "days")
+
+marketing_data[, MembershipDays := as.Date("2014-07-01", format = "%Y-%m-%d") - as.Date(Dt_Customer, format="%d-%m-%Y")]
+marketing_data$MembershipDays <- as.numeric(marketing_data$MembershipDays)
+
+marketing_data
+```
+
+```{r}
+# # Summarize Education column (use table function)  
+# 
+# 
+# # Lets treat Education column as ordinal categories and use simple levels for distance calculations
+# # Assuming following order of degrees:
+# #    HighSchool, Associate, Bachelor, Master, PhD
+# # factorize Education column (hint: use factor function with above levels)
+
+table(marketing_data$Education)
+
+# Factorize Education column
+education_levels <- c("HighSchool", "Associate", "Bachelor", "Master", "PhD")
+# education_levels
+marketing_data$Education <- factor(marketing_data$Education, levels = education_levels)
+marketing_data
+
+```
+
+```{r}
+# Summarize Marital_Status column (use table function) 
+
+table(marketing_data$Marital_Status)
+
+# Lets convert single Marital_Status categories for 5 separate binary categories  (2 points)
+# Divorced, Married, Single, Together and Widow, the value will be 1 if customer 
+# is in that category and 0 if customer is not
+# hint: use dummyVars from caret package, model.matrix or simple comparison (there are only 5 groups)
+
+marketing_data$Divorced <- ifelse(marketing_data$Marital_Status == "Divorced", 1, 0)
+marketing_data$Married <- ifelse(marketing_data$Marital_Status == "Married", 1, 0)
+marketing_data$Single <- ifelse(marketing_data$Marital_Status == "Single", 1, 0)
+marketing_data$Together <- ifelse(marketing_data$Marital_Status == "Together", 1, 0)
+marketing_data$Widow <- ifelse(marketing_data$Marital_Status == "Widow", 1, 0)
+
+head(marketing_data)
+
+
+```
+
+```{r}
+# lets remove columns which we will no longer use:
+# remove ID, Year_Birth, Dt_Customer, Marital_Status
+# and save it as df_sel 
+
+df_sel <- subset(marketing_data, select = -c(ID, Year_Birth, Dt_Customer, Marital_Status))
+
+# Convert Education to integers 
+# hint: use as.integer function, if you use factor function earlier 
+# properly then HighSchool will be 1, Associate will be 2 and so on)
+df_sel$Education <- as.integer(df_sel$Education)
+df_sel
+```
+
+```{r}
+# lets scale (2 points)
+# run scale function on df_sel and save it as df_scale
+# that will be our scaled values which we will use for analysis
+# convert factor columns to numeric
+
+df_scale <- scale(df_sel)
+# df_scale
+
+```
+
+## PCA
+
+Run PCA
+
+```{r}
+# Run PCA on df_scale, make biplot and scree plot/percentage variance explained plot
+# save as pc_out, we will use pc_out$x[,1] and pc_out$x[,2] later for plotting
+library(FactoMineR)
+library(factoextra)
+
+pc_out <- PCA(df_scale, graph = FALSE)
+
+# Create biplot
+fviz_pca_biplot(pc_out, col.var = "contrib", col.ind = "cos2", geom = "point",
+                select.var = list(contrib = 100), axes = c(1,2))
+
+# Create scree plot
+fviz_eig(pc_out, addlabels = TRUE)
+
+
+
+pca <- prcomp(df_scale, center = TRUE, scale. = TRUE)
+
+# create biplot
+biplot(pca, choices = c(1, 2))
+
+
+```
+
+```{r}
+
+```
+
+## Cluster with K-Means 
+
+### Selecting Number of Clusters
+
+Select optimal number of clusters using elbow method.
+
+```{r}
+
+km_out_list <- lapply(1:10, function(k) list(
+  k=k,
+  km_out=kmeans(df_scale, k, nstart = 20)))
+
+km_results <- data.frame(
+  k=sapply(km_out_list, function(k) k$k),
+  totss=sapply(km_out_list, function(k) k$km_out$totss),
+  tot_withinss=sapply(km_out_list, function(k) k$km_out$tot.withinss)
+  )
+```
+
+```{r}
+set.seed(1)
+fviz_nbclust(df_scale, kmeans, method = "wss",k.max=10, nstart=20, iter.max=20) +
+  geom_vline(xintercept = 2, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+
+```
+
+Select optimal number of clusters using Gap Statistic.
+
+```{r}
+set.seed(1)
+gap_kmeans <- clusGap(df_scale, kmeans, nstart = 20, K.max = 10, B = 100, iter.max= 20)
+plot(gap_kmeans, main = "Gap Statistic:kmeans")
+```
+
+Select optimal number of clusters using Silhouette method.
+
+```{r}
+set.seed(3)
+par(mar = c(5, 2, 4, 2), mfrow=c(2,2))
+for(k in c(2,3,4,9)) {
+  kmeans_cluster <- kmeans(df_scale, k, nstart=20)
+  si <- silhouette(kmeans_cluster$cluster, dist = dist(df_scale))
+  plot(si,main="")
+}
+par(mar = c(1, 1, 1, 1), mfrow=c(1,1))
+```
+
+Number of k = 2 and we can select k = 3 for elbow, gap statistics and
+silhuettes as well as clustering
+
+## Clusters Visulalization
+
+Make k-Means clusters with selected k_kmeans (store result as km_out).
+Plot your k_kmeans clusters on biplot (just PC1 vs PC2) by coloring
+points by their cluster id.
+
+```{r}
+set.seed(4)
+Km_out <- kmeans(df_scale, 3, nstart = 25)
+Km_out
+
+```
+
+```{r}
+set.seed(6)
+fviz_cluster(Km_out, data = df_scale, ellipse.type = 'euclid', ggtheme = theme_minimal() )
+```
+
+```{r}
+set.seed(19)
+Km_out$cluster <- as.factor(Km_out$cluster)
+df_kmeans <- cbind(df_sel, cluster = Km_out$cluster)
+```
+
+*there are 3 groups.* The k-means algorithm identified three clusters on
+the plot. The red cluster is high spenders who make frequent purchases,
+the green cluster is low spenders who make infrequent purchases, and the
+blue cluster is high spenders who make purchases less frequently
+
+## Characterizing Cluster
+
+Perform descriptive statistics analysis on obtained cluster. Based on
+that does one or more group have a distinct characteristics? Hint: add
+cluster column to original df dataframe
+
+```{r}
+set.seed(14)
+Km_out$cluster <- as.factor(Km_out$cluster)
+df_kmeans <- cbind(df_sel, cluster= Km_out$cluster)
+
+agg_kmeans <- aggregate(df_kmeans[,1:20], by= list(df_kmeans$cluster), mean) %>% as.data.frame()
+
+agg_kmeans
+```
+
+```{r}
+
+```
+
+## Cluster with Hierarchical Clustering
+
+Perform clustering with Hierarchical method (Do you need to use scaling
+here?). Try complete, single and average linkage. Plot dendagram, based
+on it choose linkage and number of clusters, if possible, explain your
+choice.
+
+I believe that scaling is necessary. Dendrograms show that the complete
+linkage method produces the most distinct clusters, while the single
+linkage method produces the fewest. Clusters with average linkage are
+located in the middle. The full and average linkage methods both show a
+subtle elbow around three clusters, but the single linkage
+method does not.
+
+```{r}
+set.seed(23)
+dist_matrix <- dist(df_scale, method = "euclidean")
+hie_comp <- hclust(dist_matrix, method = "complete")
+hc <- as.dendrogram(hie_comp)
+
+plot(hc, main = "Linkage and euclidean", cex = .9)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
